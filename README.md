@@ -1,45 +1,87 @@
 # Spark-X2.5-4B LoRA 微调实验
 
-本仓库记录一次基于 **Spark-X2.5-4B** 的 LoRA 指令微调实验，并提供与参考仓库相同的公开入口：模型下载、数据格式转换、训练、推理和评测脚本。仓库中的结果是脱敏后的实验摘要，便于复核训练方法和指标变化。
+基于 Spark-X2.5-4B 的文本指令微调实验记录，提供公开的训练、推理和评测入口，并同步脱敏后的结果摘要。
 
-## 模型与方法
+<p align="center">
+  <a href="https://github.com/leeguandong/EcommerceLLMSpark"><img src="https://img.shields.io/badge/Project-Spark--X2.5--4B-green"></a>
+  <a href="https://github.com/leeguandong/EcommerceLLMSpark/issues"><img src="https://img.shields.io/github/issues/leeguandong/EcommerceLLMSpark?color=0088ff"></a>
+  <a href="https://github.com/leeguandong/EcommerceLLMSpark/pulls"><img src="https://img.shields.io/github/issues-pr/leeguandong/EcommerceLLMSpark?color=0088ff"></a>
+  <a href="https://github.com/leeguandong/EcommerceLLMSpark/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-lightgrey.svg"></a>
+</p>
 
-- 模型：[XHToken/Spark-X2.5-4B](https://www.modelscope.cn/models/XHToken/Spark-X2.5-4B)
+## 本文贡献
+
+- 使用 Spark-X2.5-4B 完成一次 SFT + LoRA 微调，并在固定留出集上比较微调前后的行为。
+- 覆盖意图识别、商品信息抽取、标题生成、场景应答、搜索摘要和短视频文案等文本任务。
+- 提供路径参数化的模型下载、数据转换、训练、推理、评测和预检脚本。
+- 发布按任务指标、代表性安全示例和训练曲线；不发布原始数据、完整预测或模型权重。
+
+## 模型与训练方法
+
+| 模型权重 | 下载链接 | 微调方法 |
+| :- | :- | :- |
+| Spark-X2.5-4B | [ModelScope](https://www.modelscope.cn/models/XHToken/Spark-X2.5-4B) | LoRA |
+
+- LoRA 配置：`rank=16`、`alpha=32`、`dropout=0.05`
+- 对话模板：`spark`；训练和评测使用 `enable_thinking=false`
+- 训练设置：1 epoch、19,555 条样本、4 × A800 80GB，训练主体约 27.24 分钟
 - 训练框架：[LlamaFactory](https://github.com/hiyouga/LLaMA-Factory)
-- 方法：监督微调（SFT）+ LoRA，rank=16、alpha=32、dropout=0.05
-- 对话模板：`spark`；训练和评测均使用 `enable_thinking=false`
-- 本次运行：1 epoch，19,555 条训练样本，4 × A800 80GB，训练主体约 27.24 分钟
 
-历史结果中出现的 `qwen1.5-1.8b`、`qwen1.5-7b`、`qwen2.5-7b`、`qwen3-8b` 和 `llama3-chinese-sft` 均表示对应模型的既有微调版本；本仓库不重新发布它们的权重。
+历史结果中的 `qwen1.5-1.8b`、`qwen1.5-7b`、`qwen2.5-7b`、`qwen3-8b` 和 `llama3-chinese-sft` 均表示对应模型的**微调版本**，仅作为对比背景，不在本仓库重新发布权重。
 
-## 安装
+## 数据集
 
-建议使用 Python 3.10+、PyTorch、Transformers、PEFT、Datasets、PyYAML 和 LlamaFactory。依赖安装方式以目标硬件和 CUDA 版本为准；示例：
+训练数据不随仓库发布。数据处理脚本接收用户自行准备的 JSON 或 JSONL 文件，每条记录包含：
 
-```bash
-pip install torch transformers peft datasets pyyaml modelscope
-pip install llamafactory
+```json
+{"instruction": "任务说明", "input": "用户输入", "output": "目标回答"}
 ```
 
-下载模型到自定义目录：
+转换为 LlamaFactory 使用的 ShareGPT JSONL：
+
+```bash
+python scripts/prepare_data.py ./private/train.jsonl ./data/train.jsonl
+python scripts/prepare_data.py ./private/validation.jsonl ./data/validation.jsonl
+```
+
+使用前请完成数据授权、脱敏、重复样本检查和质量审核。
+
+## 快速上手
+
+### 1. 安装环境
+
+```bash
+pip install -r requirements.txt
+```
+
+### 2. 下载模型
 
 ```bash
 python scripts/download_model.py --output-dir ./models/Spark-X2.5-4B
 ```
 
-## 数据格式
+### 3. 模型推理
 
-训练数据不随仓库发布。准备一个 JSON 或 JSONL 文件，每条记录包含 `instruction`、`input`、`output` 字段，然后转换为 ShareGPT JSONL：
+使用 Spark-X2.5-4B：
 
 ```bash
-python scripts/prepare_data.py ./private/train.jsonl ./data/train.jsonl
+python scripts/chat.py \
+  --model-path ./models/Spark-X2.5-4B \
+  --prompt "请用一句话介绍这项服务。"
 ```
 
-将验证集写入 `./data/validation.jsonl`，并按 LlamaFactory 的数据集注册方式配置 `dataset` 与 `eval_dataset`。请在使用前完成脱敏、授权和质量检查。
+使用 LoRA 适配器：
 
-## 训练
+```bash
+python scripts/chat.py \
+  --model-path ./models/Spark-X2.5-4B \
+  --adapter-path ./outputs/spark4b_lora_v1 \
+  --prompt "请用一句话介绍这项服务。"
+```
 
-`configs/spark4b_lora.yaml` 保存了本次实验的关键超参数。路径通过命令行覆盖，不依赖任何特定服务器目录：
+## 模型训练
+
+训练配置见 [`configs/spark4b_lora.yaml`](configs/spark4b_lora.yaml)。路径通过命令行覆盖：
 
 ```bash
 python scripts/train.py \
@@ -49,39 +91,14 @@ python scripts/train.py \
   --output-dir ./outputs/spark4b_lora_v1
 ```
 
-多卡训练请根据硬件使用 LlamaFactory 或 Accelerate 的标准启动方式；训练入口不包含机器名、容器名或 GPU 编号。
+多卡运行请根据硬件使用 LlamaFactory 或 Accelerate 的标准启动方式。仓库脚本不包含机器名、容器名、GPU 编号或内部缓存路径。
 
-## 推理与评测
+## 效果展示
 
-单条推理：
-
-```bash
-python scripts/chat.py --model-path ./models/Spark-X2.5-4B \
-  --adapter-path ./outputs/spark4b_lora_v1 \
-  --prompt "请用一句话介绍这项服务。"
-```
-
-评测输入为 JSONL，每行至少包含 `id` 和 `prompt`。脚本支持中断后继续写入：
-
-```bash
-python scripts/evaluate.py --model-path ./models/Spark-X2.5-4B \
-  --adapter-path ./outputs/spark4b_lora_v1 \
-  --input ./data/test_prompts.jsonl \
-  --output ./reports/predictions.jsonl
-```
-
-长任务运行前可先做模板和模型加载检查：
-
-```bash
-python scripts/preflight.py --model-path ./models/Spark-X2.5-4B
-```
-
-## 本次实验结果
-
-固定留出集共 1,014 条，两个版本使用相同 prompt、模板、greedy 解码和任务长度预算。
+固定留出集共 1,014 条，两个版本采用相同 prompt、模板、greedy 解码和任务长度预算。
 
 | 指标 | Spark-X2.5-4B | Spark-X2.5-4B + LoRA v1 | 变化 |
-|---|---:|---:|---:|
+| :- | -: | -: | -: |
 | 意图识别集合完全匹配准确率 | 70.93% | 90.70% | +19.77 个百分点 |
 | 意图识别 Micro-F1 | 82.93% | 92.51% | +9.58 个百分点 |
 | 商品抽取 Micro-F1 | 75.79% | 82.62% | +6.83 个百分点 |
@@ -92,14 +109,39 @@ python scripts/preflight.py --model-path ./models/Spark-X2.5-4B
 
 基模在商品召回、解释展开和部分文案多样性方面保留优势；LoRA 版本在意图识别、商品抽取精度、回答收敛长度以及部分场景应答的结构化程度上更好。两者没有全面胜负：长标题 6 条中，长度上限命中由 0 增至 2，重复 4-gram 均值由 30.42% 升至 55.49%；SEO 重复率由 10.56% 升至 35.68%，商品文案、直播、短视频等任务也出现不同程度的重复上升。
 
-完整的按任务指标、示例和训练曲线见 [`evaluation/spark_x2_5_4b/`](evaluation/spark_x2_5_4b/)。示例只展示不含内部标识或个人信息的内容。
+更多按任务指标见 [`evaluation/spark_x2_5_4b/metrics.json`](evaluation/spark_x2_5_4b/metrics.json)，安全示例见 [`examples.md`](evaluation/spark_x2_5_4b/examples.md)，训练曲线见 [`training_curves.png`](evaluation/spark_x2_5_4b/training_curves.png)。
 
-## 发布边界与局限
+## 评测命令
 
-本仓库不包含训练、验证或测试原始数据，完整预测、运行日志、checkpoint、LoRA 权重和历史实验压缩包也未上传。公开脚本只接受用户自行提供的路径和数据。
+评测输入为 JSONL，每行至少包含 `id` 和 `prompt`；输出支持中断后继续：
 
-长标题仅 6 条，短标题和小红书文案各 5 条，样本量较小。尚未完成独立人工盲评、系统性事实准确率评估、外部通用基准或多随机种子复验；逐例核查仅用于说明行为差异，不能替代这些评估。因此，指标变化应理解为本次固定测试集上的实验观察，不应直接外推为通用能力或生产质量结论。
+```bash
+python scripts/evaluate.py \
+  --model-path ./models/Spark-X2.5-4B \
+  --adapter-path ./outputs/spark4b_lora_v1 \
+  --input ./data/test_prompts.jsonl \
+  --output ./reports/predictions.jsonl
+```
 
-## 许可证
+长任务运行前可先检查模型和对话模板：
 
-代码按仓库根目录 [LICENSE](LICENSE) 发布。模型权重及其许可证请以 ModelScope 原页面为准。
+```bash
+python scripts/preflight.py --model-path ./models/Spark-X2.5-4B
+```
+
+## 项目致谢
+
+1. [LlamaFactory](https://github.com/hiyouga/LLaMA-Factory) 提供训练框架。
+2. [Spark-X2.5-4B](https://www.modelscope.cn/models/XHToken/Spark-X2.5-4B) 提供基础模型。
+
+## 免责声明
+
+本项目仅用于研究和工程验证。参考文本重合度不等于事实正确性或文案质量；模型输出可能存在遗漏、重复或事实错误，使用者应自行审核。长标题仅 6 条，短标题和小红书文案各 5 条，样本量较小；尚未完成独立人工盲评、系统性事实准确率评估、外部通用基准或多随机种子复验，逐例核查不能替代这些评估。
+
+## 发布边界
+
+仓库不包含训练、验证或测试原始数据，完整预测、运行日志、checkpoint、LoRA 权重、历史实验压缩包、服务器路径、个人信息或访问凭据。公开脚本只接受用户自行提供的路径和数据。
+
+## 使用许可
+
+代码遵循仓库根目录 [MIT License](LICENSE)。模型权重及其许可证请以 ModelScope 原页面为准。
