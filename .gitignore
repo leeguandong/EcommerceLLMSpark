@@ -1,0 +1,17 @@
+# Runtime and local artifacts
+.env*
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+logs/
+outputs/
+checkpoints/
+models/
+data/
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.ckpt
+*.zip
