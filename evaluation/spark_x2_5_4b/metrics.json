@@ -1,7 +1,7 @@
 {
   "models": [
     "Spark-X2.5-4B",
-    "Spark-X2.5-4B + ecommerce LoRA v1"
+    "Spark-X2.5-4B + LoRA v1"
   ],
   "test_examples": 1014,
   "decoding": "greedy; enable_thinking=false; same task-specific budgets",
